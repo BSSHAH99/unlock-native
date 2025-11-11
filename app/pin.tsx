@@ -8,6 +8,7 @@ import {
   Platform,
   StyleSheet,
   Text,
+  TouchableOpacity,
   Vibration,
   View,
 } from 'react-native';
@@ -19,10 +20,11 @@ export default function PinScreen() {
   const { settings, bumpFail, resetFails, addAttempt } = useSettings();
   const [value, setValue] = useState('');
   const [wrong, setWrong] = useState(false);
+  const [tempLength, setTempLength] = useState(settings.passwordLength || 6);
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
-  const passwordLength = settings.passwordLength || 6;
   const remain = Math.max(0, settings.maxAttempts - (settings.failCount || 0));
 
   // Fade-in animation
@@ -61,10 +63,10 @@ export default function PinScreen() {
       return;
     }
 
-    const newValue = (value + digit).slice(0, passwordLength);
+    const newValue = (value + digit).slice(0, tempLength);
     setValue(newValue);
 
-    if (newValue.length === passwordLength) {
+    if (newValue.length === tempLength) {
       addAttempt(newValue);
 
       const fails = await bumpFail();
@@ -82,6 +84,12 @@ export default function PinScreen() {
         setValue('');
       }, 600);
     }
+  };
+
+  // 🆘 Emergency long-press toggle (4 ↔ 6 digits)
+  const onEmergencyLongPress = () => {
+    const newLen = tempLength === 4 ? 6 : 4;
+    setTempLength(newLen);
   };
 
   return (
@@ -111,7 +119,7 @@ export default function PinScreen() {
 
             <View style={{ height: 30 }} />
             <View style={styles.dotsRow}>
-              {new Array(passwordLength).fill(0).map((_, i) => (
+              {new Array(tempLength).fill(0).map((_, i) => (
                 <View
                   key={i}
                   style={[styles.dot, i < value.length && styles.dotFilled]}
@@ -122,10 +130,16 @@ export default function PinScreen() {
 
           <Animated.View style={[styles.padWrapper, { opacity: fadeAnim }]}>
             <PinPad onKey={onKey} />
-          </Animated.View>
 
-          {/* Emergency call placeholder */}
-          <Text style={styles.emergency}>Emergency call</Text>
+            {/* Emergency button with long-press secret */}
+            <TouchableOpacity
+              onLongPress={onEmergencyLongPress}
+              delayLongPress={400}
+              style={styles.emergencyBtn}
+            >
+              <Text style={styles.emergencyTxt}>Emergency call</Text>
+            </TouchableOpacity>
+          </Animated.View>
         </View>
       </ImageBackground>
     </KeyboardAvoidingView>
@@ -180,9 +194,13 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
   },
-  emergency: {
+  emergencyBtn: {
+    marginTop: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emergencyTxt: {
     color: 'rgba(255,255,255,0.8)',
     fontSize: 15,
-    marginBottom: 10,
   },
 });
