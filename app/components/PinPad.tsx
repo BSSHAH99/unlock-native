@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
   Platform,
@@ -17,57 +18,46 @@ export default function PinPad({
 }) {
   const press = (d: string) => {
     if (disabled) return;
-    if (Platform.OS !== 'web') Vibration.vibrate(10); // subtle haptic feedback
+    if (Platform.OS !== 'web') Vibration.vibrate(10);
     onKey(d);
   };
 
-  const Row = ({ keys }: { keys: string[] }) => (
-    <View style={styles.row}>
-      {keys.map((d, i) => (
-        <TouchableOpacity
-          key={i}
-          style={[styles.key, disabled && { opacity: 0.4 }]}
-          activeOpacity={0.6}
-          onPress={() => press(d)}
-        >
-          <Text
-            style={[
-              styles.keyText,
-              d === 'OK' && { color: '#fff', fontSize: 20, fontWeight: '700' },
-            ]}
-          >
-            {d === '<-' ? '⌫' : d}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
+  const Key = ({ label, icon }: { label?: string; icon?: React.ReactNode }) => (
+    <TouchableOpacity
+      style={[styles.key, disabled && { opacity: 0.4 }]}
+      activeOpacity={0.6}
+      onPress={() => press(label || '')}
+    >
+      {icon ? icon : <Text style={styles.keyText}>{label}</Text>}
+    </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
-      <Row keys={['1', '2', '3']} />
-      <Row keys={['4', '5', '6']} />
-      <Row keys={['7', '8', '9']} />
+      {[
+        ['1', '2', '3'],
+        ['4', '5', '6'],
+        ['7', '8', '9'],
+      ].map((row, i) => (
+        <View key={i} style={styles.row}>
+          {row.map(n => (
+            <Key key={n} label={n} />
+          ))}
+        </View>
+      ))}
+
       <View style={styles.row}>
+        <Key
+          label="<-"
+          icon={<Ionicons name="backspace-outline" size={26} color="#fff" />}
+        />
+        <Key label="0" />
         <TouchableOpacity
-          style={[styles.key, { opacity: disabled ? 0.4 : 1 }]}
-          onPress={() => press('<-')}
-        >
-          <Text style={styles.sub}>⌫</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.key, { opacity: disabled ? 0.4 : 1 }]}
-          onPress={() => press('0')}
-        >
-          <Text style={styles.keyText}>0</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.key, styles.okButton]}
+          style={[styles.key, styles.enterKey]}
+          activeOpacity={0.8}
           onPress={() => press('ok')}
         >
-          <Text style={styles.okText}>OK</Text>
+          <Ionicons name="arrow-forward" size={26} color="#fff" />
         </TouchableOpacity>
       </View>
     </View>
@@ -77,11 +67,9 @@ export default function PinPad({
 const styles = StyleSheet.create({
   container: {
     alignSelf: 'center',
-    width: '75%',
-    marginBottom: 40,
-    justifyContent: 'center',
+    width: '80%',
+    marginBottom: 20,
     alignItems: 'center',
-    gap: 10,
   },
   row: {
     flexDirection: 'row',
@@ -93,25 +81,24 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#333',
+    borderWidth: 1,
+    borderColor: '#444',
     shadowColor: '#000',
+    shadowOpacity: 0.5,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   keyText: {
-    color: 'white',
+    color: '#fff',
     fontSize: 26,
-    fontWeight: '500',
+    fontWeight: '400',
   },
-  sub: { color: 'white', fontSize: 22, fontWeight: '400' },
-  okButton: {
-    backgroundColor: '#1E88E5',
-    shadowColor: '#1E88E5',
-    shadowOpacity: 0.4,
+  enterKey: {
+    backgroundColor: '#2196F3',
+    borderColor: '#2196F3',
   },
-  okText: { color: 'white', fontSize: 20, fontWeight: '700' },
 });

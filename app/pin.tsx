@@ -1,11 +1,14 @@
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
   ImageBackground,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
   Text,
+  Vibration,
   View,
 } from 'react-native';
 import PinPad from './components/PinPad';
@@ -13,11 +16,44 @@ import { useSettings } from './hooks/useSettings';
 
 export default function PinScreen() {
   const router = useRouter();
-  const { settings, bumpFail, resetFails, addAttempt, clearAttempts } =
-    useSettings();
+  const { settings, bumpFail, resetFails, addAttempt } = useSettings();
   const [value, setValue] = useState('');
+  const [wrong, setWrong] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const shakeAnim = useRef(new Animated.Value(0)).current;
 
+  const passwordLength = settings.passwordLength || 6;
   const remain = Math.max(0, settings.maxAttempts - (settings.failCount || 0));
+
+  // Fade-in animation
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 700,
+      easing: Easing.out(Easing.exp),
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  const shake = () => {
+    Animated.sequence([
+      Animated.timing(shakeAnim, {
+        toValue: 10,
+        duration: 60,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: -10,
+        duration: 60,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: 0,
+        duration: 60,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
 
   const onKey = async (digit: string) => {
     if (digit === '<-') {
@@ -25,26 +61,27 @@ export default function PinScreen() {
       return;
     }
 
-    if (digit === 'ok') {
-      if (!value) return;
+    const newValue = (value + digit).slice(0, passwordLength);
+    setValue(newValue);
 
-      // store entered PIN attempt
-      addAttempt(value);
+    if (newValue.length === passwordLength) {
+      addAttempt(newValue);
 
       const fails = await bumpFail();
-
-      // Unlock after Nth attempt
       if (fails === settings.maxAttempts) {
         resetFails();
         router.replace({ pathname: '/home', params: { mode: 'normal' } });
         return;
       }
 
-      setValue('');
-      return;
+      setWrong(true);
+      shake();
+      Vibration.vibrate(60);
+      setTimeout(() => {
+        setWrong(false);
+        setValue('');
+      }, 600);
     }
-
-    setValue(v => (v + digit).slice(0, 10));
   };
 
   return (
@@ -58,48 +95,72 @@ export default function PinScreen() {
             ? { uri: settings.lockImageUri }
             : require('../assets/images/lock-fallback.png')
         }
-        style={pstyles.bg}
+        style={styles.bg}
         resizeMode="cover"
       >
-        <View style={pstyles.dim}>
-          <View style={pstyles.header}>
-            <Text style={pstyles.title}>Enter PIN</Text>
-            <Text style={pstyles.sub}>Attempts left: {remain}</Text>
-            <View style={{ height: 20 }} />
-            <View style={pstyles.dotsRow}>
-              {new Array(6).fill(0).map((_, i) => (
+        <View style={styles.overlay}>
+          <View style={styles.gradient} />
+
+          <Animated.View
+            style={[styles.header, { transform: [{ translateX: shakeAnim }] }]}
+          >
+            <Text style={[styles.title, wrong && { color: '#ff6b6b' }]}>
+              {wrong ? 'Wrong PIN' : 'Enter PIN'}
+            </Text>
+            {!wrong && <Text style={styles.sub}>Attempts left: {remain}</Text>}
+
+            <View style={{ height: 30 }} />
+            <View style={styles.dotsRow}>
+              {new Array(passwordLength).fill(0).map((_, i) => (
                 <View
                   key={i}
-                  style={[pstyles.dot, i < value.length && pstyles.dotFilled]}
+                  style={[styles.dot, i < value.length && styles.dotFilled]}
                 />
               ))}
             </View>
-          </View>
+          </Animated.View>
 
-          <View style={pstyles.padWrapper}>
+          <Animated.View style={[styles.padWrapper, { opacity: fadeAnim }]}>
             <PinPad onKey={onKey} />
-          </View>
+          </Animated.View>
+
+          {/* Emergency call placeholder */}
+          <Text style={styles.emergency}>Emergency call</Text>
         </View>
       </ImageBackground>
     </KeyboardAvoidingView>
   );
 }
 
-const pstyles = StyleSheet.create({
-  bg: { flex: 1 },
-  dim: {
+const styles = StyleSheet.create({
+  bg: { flex: 1, backgroundColor: '#000' },
+  overlay: {
     flex: 1,
-    paddingHorizontal: 24,
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    paddingVertical: 50,
+    paddingVertical: 60,
   },
-  header: { alignItems: 'center' },
-  title: { color: 'white', fontSize: 24, fontWeight: '600' },
-  sub: { color: '#eee', marginTop: 6 },
+  gradient: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  header: {
+    alignItems: 'center',
+    marginTop: 100,
+  },
+  title: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '500',
+  },
+  sub: {
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 4,
+    fontSize: 14,
+  },
   dotsRow: {
     flexDirection: 'row',
+    justifyContent: 'center',
     gap: 10,
     marginTop: 20,
   },
@@ -107,10 +168,21 @@ const pstyles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    borderWidth: 2,
-    borderColor: 'white',
-    opacity: 0.75,
+    borderWidth: 1.5,
+    borderColor: '#ccc',
+    opacity: 0.5,
   },
-  dotFilled: { backgroundColor: 'white', opacity: 0.95 },
-  padWrapper: { width: '100%', marginBottom: 20 },
+  dotFilled: {
+    backgroundColor: '#fff',
+    opacity: 0.9,
+  },
+  padWrapper: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  emergency: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 15,
+    marginBottom: 10,
+  },
 });

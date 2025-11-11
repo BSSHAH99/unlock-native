@@ -1,7 +1,10 @@
 // File: app/index.tsx
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import {
+  Animated,
+  Easing,
   ImageBackground,
   Pressable,
   StyleSheet,
@@ -15,22 +18,46 @@ import { useSettings } from './hooks/useSettings';
 export default function LockScreen() {
   const router = useRouter();
   const { settings } = useSettings();
-  const gestureActive = useRef(false); // prevents multiple triggers
+  const gestureActive = useRef(false);
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Animate clock and lock fade-in
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1000,
+        easing: Easing.out(Easing.exp),
+        useNativeDriver: true,
+      }),
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(translateY, {
+            toValue: -10,
+            duration: 800,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(translateY, {
+            toValue: 0,
+            duration: 800,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]),
+      ),
+    ]).start();
+  }, []);
 
   const onGesture = ({ nativeEvent }: any) => {
-    // ignore if already triggered
     if (gestureActive.current) return;
-
-    // detect gesture end
     if (nativeEvent.state === State.END) {
       gestureActive.current = true;
-
-      // swipe up (single finger) → open PIN
-      if (nativeEvent.translationY < -80) {
+      if (nativeEvent.translationY < -60) {
         router.push('/pin');
       }
-
-      // reset trigger after short delay
       setTimeout(() => (gestureActive.current = false), 500);
     }
   };
@@ -43,12 +70,8 @@ export default function LockScreen() {
   );
 
   return (
-    <PanGestureHandler
-      onHandlerStateChange={onGesture}
-      minPointers={1}
-      maxPointers={1}
-    >
-      <View style={{ flex: 1 }}>
+    <PanGestureHandler onHandlerStateChange={onGesture}>
+      <View style={styles.container}>
         <ImageBackground
           source={
             settings.lockImageUri
@@ -58,22 +81,31 @@ export default function LockScreen() {
           style={styles.bg}
           resizeMode="cover"
         >
-          <View style={styles.overlay}>
-            {/* Pressable around the clock for long-press secret access */}
-            <Pressable
-              onLongPress={() => router.push('/settings')}
-              delayLongPress={1000} // must hold for 1 second
-              style={{ alignItems: 'center' }}
-            >
+          {/* Main lock screen UI */}
+          <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+            {/* Clock */}
+            <View style={styles.clockWrap}>
               <Clock
                 is24h={settings.is24h}
                 styleTime={styles.time}
                 styleDate={styles.date}
               />
-            </Pressable>
+              <Text style={styles.weatherText}>☁️ 15°C · Wed, Apr 24</Text>
+            </View>
 
-            <Text style={styles.hint}>Swipe up to unlock</Text>
-          </View>
+            {/* Center lock icon */}
+            <Animated.View
+              style={[styles.lockCircle, { transform: [{ translateY }] }]}
+            >
+              <Pressable
+                onLongPress={() => router.push('/settings')}
+                onPress={() => router.push('/pin')}
+                style={styles.lockButton}
+              >
+                <Ionicons name="lock-closed-outline" size={28} color="#fff" />
+              </Pressable>
+            </Animated.View>
+          </Animated.View>
         </ImageBackground>
       </View>
     </PanGestureHandler>
@@ -81,20 +113,52 @@ export default function LockScreen() {
 }
 
 const styles = StyleSheet.create({
-  bg: { flex: 1, justifyContent: 'space-between' },
+  container: { flex: 1, backgroundColor: '#000' },
+  bg: { flex: 1 },
   overlay: {
     flex: 1,
-    paddingTop: 120,
-    paddingHorizontal: 24,
     justifyContent: 'space-between',
-    paddingBottom: 40,
+    alignItems: 'center',
+    paddingVertical: 90,
+  },
+  clockWrap: {
+    alignItems: 'center',
+    marginTop: 80,
   },
   time: {
-    fontSize: 120,
-    fontWeight: '600',
-    letterSpacing: -4,
+    fontSize: 100,
+    fontWeight: '200',
+    letterSpacing: -3,
     color: 'white',
   },
-  date: { marginTop: 8, fontSize: 18, color: 'white', opacity: 0.9 },
-  hint: { textAlign: 'center', color: 'white', opacity: 0.8 },
+  date: {
+    marginTop: 4,
+    fontSize: 18,
+    color: 'rgba(255,255,255,0.85)',
+    fontWeight: '400',
+  },
+  weatherText: {
+    marginTop: 8,
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '400',
+  },
+  lockCircle: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    shadowColor: '#000',
+    shadowOpacity: 0.5,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+  },
+  lockButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    height: '100%',
+  },
 });

@@ -7,10 +7,8 @@ import React, {
   useState,
 } from 'react';
 
-// ------------------------------
-// 🔧 Types
-// ------------------------------
 export type Settings = {
+  passwordLength: number;
   pin: string;
   peekPin?: string;
   maxAttempts: number;
@@ -19,12 +17,9 @@ export type Settings = {
   desktop1Uri?: string;
   desktop2Uri?: string;
   failCount: number;
-  attemptHistory: string[]; // 👈 new: store user-entered PINs
+  attemptHistory: string[]; // store entered PINs
 };
 
-// ------------------------------
-// 🧱 Default settings
-// ------------------------------
 const defaultSettings: Settings = {
   pin: '0000',
   peekPin: undefined,
@@ -35,33 +30,29 @@ const defaultSettings: Settings = {
   desktop2Uri: undefined,
   failCount: 0,
   attemptHistory: [],
+  passwordLength: 6,
 };
 
 const STORAGE_KEY = 'magician.lock.settings.v1';
 
-// ------------------------------
-// 📦 Context Setup
-// ------------------------------
 type SettingsContextType = {
   settings: Settings;
   update: (patch: Partial<Settings>) => void;
   bumpFail: () => Promise<number>;
   resetFails: () => void;
   addAttempt: (pin: string) => void;
-  clearAttempts: () => void;
+  clearAttempts: () => Promise<void>; // async now 🔧
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(
   undefined,
 );
 
-// ------------------------------
-// ⚙️ Provider Component
-// ------------------------------
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [loaded, setLoaded] = useState(false);
 
+  // Load saved settings
   useEffect(() => {
     (async () => {
       try {
@@ -75,6 +66,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
+  // Save on every change
   useEffect(() => {
     if (loaded) {
       AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(settings)).catch(err =>
@@ -92,19 +84,23 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     return next;
   };
 
-  const resetFails = () => {
-    setSettings(prev => ({ ...prev, failCount: 0 }));
-  };
+  const resetFails = () => setSettings(prev => ({ ...prev, failCount: 0 }));
 
-  const addAttempt = (pin: string) => {
+  const addAttempt = (pin: string) =>
     setSettings(prev => ({
       ...prev,
       attemptHistory: [...(prev.attemptHistory || []), pin],
     }));
-  };
 
-  const clearAttempts = () => {
-    setSettings(prev => ({ ...prev, attemptHistory: [] }));
+  const clearAttempts = async () => {
+    // 🔧 persist clear
+    const cleared = { ...settings, attemptHistory: [] };
+    setSettings(cleared);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(cleared));
+    } catch (e) {
+      console.error('⚠️ Failed to clear attempt history:', e);
+    }
   };
 
   const value = useMemo(
@@ -120,6 +116,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   );
 
   if (!loaded) return null;
+
   return (
     <SettingsContext.Provider value={value}>
       {children}
@@ -127,9 +124,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ------------------------------
-// 🪄 Hook
-// ------------------------------
 export function useSettings() {
   const ctx = useContext(SettingsContext);
   if (!ctx)

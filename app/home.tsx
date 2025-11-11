@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSettings } from './hooks/useSettings';
 
@@ -9,11 +9,21 @@ export default function Home() {
   const [revealed, setRevealed] = useState(false);
 
   const img = settings.desktop1Uri;
-  const peekIndex = settings.peekPin ? parseInt(settings.peekPin, 10) - 1 : -1;
-  const peekValue =
-    peekIndex >= 0 && peekIndex < (settings.attemptHistory || []).length
-      ? settings.attemptHistory[peekIndex]
-      : 'N/A';
+
+  // --- Compute which attempt to show ---
+  const peekIndex = useMemo(() => {
+    const peekNumber = parseInt(settings.peekPin || '0', 10);
+    if (!peekNumber || peekNumber < 1) return -1;
+    return peekNumber - 1; // convert 1-based to 0-based index
+  }, [settings.peekPin]);
+
+  const peekValue = useMemo(() => {
+    const history = settings.attemptHistory || [];
+    if (peekIndex >= 0 && peekIndex < history.length) {
+      return history[peekIndex];
+    }
+    return '—'; // nothing yet
+  }, [peekIndex, settings.attemptHistory]);
 
   return (
     <View style={{ flex: 1, backgroundColor: 'black' }}>
@@ -32,7 +42,12 @@ export default function Home() {
 
       {revealed && (
         <View style={styles.peekBox}>
-          <Text style={styles.peekText}>Peek Password: {peekValue}</Text>
+          <Text style={styles.peekText}>
+            Peek Password:{' '}
+            <Text style={{ fontWeight: '700', color: '#4ade80' }}>
+              {peekValue}
+            </Text>
+          </Text>
         </View>
       )}
 
@@ -62,9 +77,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 150,
     right: 20,
-    backgroundColor: 'rgba(0,0,0,0.75)',
+    backgroundColor: 'rgba(0,0,0,0.8)',
     padding: 10,
     borderRadius: 8,
   },
-  peekText: { color: 'white', fontSize: 16, fontWeight: '600' },
+  peekText: { color: 'white', fontSize: 16 },
 });
